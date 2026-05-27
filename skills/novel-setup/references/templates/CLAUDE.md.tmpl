@@ -1,0 +1,58 @@
+# {项目名} — 长篇小说工具集
+
+## Skill 路由表
+
+| 命令 | Skill | 说明 |
+|------|-------|------|
+| `/novel`、`/小说` | novel | 工具箱路由 · 模糊意图自动分发 |
+| `/novel-setup`、`/准备写书` | novel-setup | 环境部署 · hooks/rules/agents 一键部署 |
+| `/novel-outline`、`/写大纲` | novel-outline | 大纲创作（选题→设定→卷纲→细纲） |
+| `/novel-write`、`/续写` | novel-write | 正文写作（章节循环：简报→预检→写→检→审→润→接受） |
+| `/novel-review`、`/审查` | novel-review | 质量审查（16维度评分） |
+| `/novel-polish`、`/润色` | novel-polish | 润色+去AI味（六道门） |
+| `/novel-explorer`、`/查状态` | novel-explorer | 项目状态查询（只读） |
+| `/novel-researcher`、`/查资料` | novel-researcher | 外部资料搜集 |
+| `/novel-scan`、`/扫榜` | novel-scan | 排行榜扫描 |
+| `/novel-analyze`、`/拆文` | novel-analyze | 拆文分析 |
+| `/novel-import`、`/导入` | novel-import | 导入已有小说 |
+| `/novel-cover`、`/封面` | novel-cover | 封面生成 |
+
+## 文件结构
+
+- `拆文库/` — 拆文分析结果
+- `{书名}/正文/` — 正文章节
+- `{书名}/设定/` — 角色、世界观、势力
+- `{书名}/大纲/` — 卷纲、细纲
+- `{书名}/追踪/` — 进度、伏笔、角色状态、知识库、上下文
+- `{书名}/对标/` — 对标作品分析
+- `{书名}/参考资料/` — 研究资料
+
+## 工作流模式
+
+### 大纲阶段（阶段推进）
+```
+novel-outline: 选题 → 设定 → 卷级大纲 → 细纲（前10章）
+```
+
+### 正文阶段（章节循环）
+```
+novel-write: 章节简报 → 预检 → 写作 → 本地检查 → novel-review → novel-polish → 接受
+```
+
+### 滚动补纲
+每写完 5 章，回 novel-outline 滚动补后 5 章细纲。
+
+## 协作规则
+
+Agent 间的协调关系由各 Agent 定义文件的职责边界描述。
+
+## Compact 后恢复上下文
+
+此部分在 compact 后自动生效。
+写作中的关键上下文：
+1. 当前写作项目名称和进度
+2. 最近讨论的角色设定变更
+3. 未完成的伏笔列表
+4. 当前章节的情绪/节奏目标
+
+如果存在 {书名}/追踪/上下文.md，compact 后首先读取恢复上下文。
