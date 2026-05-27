@@ -3,6 +3,7 @@ name: novel-setup
 version: 1.0.0
 description: |
   长篇小说工具集基础设施部署。将 hooks/rules/agents/CLAUDE.md 部署到用户项目目录。
+  兼容 Claude Code、OpenCode、Codex、Cursor 等平台。
   触发方式：/novel-setup、「准备写书」「帮我搭环境」「配置写作项目」
 ---
 

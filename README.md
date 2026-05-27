@@ -1,6 +1,16 @@
 # oh-novel-claudecode
 
-长篇小说创作工具箱 — 基于 Claude Code 的 AI 辅助写作系统
+长篇小说创作工具箱 — 多平台 AI 辅助写作系统
+
+## 兼容平台
+
+| 平台 | 状态 |
+|------|------|
+| Claude Code | ✓ 完全支持 |
+| OpenCode | ✓ 完全支持 |
+| Codex | ✓ 完全支持 |
+| Cursor | ✓ 完全支持 |
+| 其他 | ✓ 基本支持 |
 
 ## 功能特性
 
@@ -70,15 +80,15 @@ python scripts/export_chapters.py <项目目录> --range 1-10
 
 ## Agent
 
-| Agent | 模型 | 职责 |
-|-------|------|------|
-| story-architect | opus | 架构设计、世界观、大纲 |
-| narrative-writer | sonnet | 正文写作 |
-| character-designer | sonnet | 角色设计、对话 |
-| consistency-checker | haiku | 一致性检查 |
-| story-explorer | haiku | 项目查询 |
-| story-researcher | sonnet | 资料搜集 |
-| chapter-extractor | haiku | 章节摘要 |
+| Agent | Claude Code | OpenCode/Codex/Cursor | 职责 |
+|-------|-------------|----------------------|------|
+| story-architect | opus | claude-3-opus / gpt-4o | 架构设计、世界观、大纲 |
+| narrative-writer | sonnet | claude-3-5-sonnet / gpt-4-turbo | 正文写作 |
+| character-designer | sonnet | claude-3-5-sonnet / gpt-4-turbo | 角色设计、对话 |
+| consistency-checker | haiku | claude-3-haiku / gpt-4o-mini | 一致性检查 |
+| story-explorer | haiku | claude-3-haiku / gpt-4o-mini | 项目查询 |
+| story-researcher | sonnet | claude-3-5-sonnet / gpt-4-turbo | 资料搜集 |
+| chapter-extractor | haiku | claude-3-haiku / gpt-4o-mini | 章节摘要 |
 
 ## 参考文档
 
