@@ -100,12 +100,12 @@ references_dir: .claude/skills/novel-setup/references/agent-references
 
 novel-setup 提供以下工具脚本，位于 `novel-setup/references/templates/scripts/`：
 
-### convert_json_to_md.py — JSON 转 Markdown
+### convert_json_to_md.ps1 — JSON 转 Markdown（推荐）
 
 将 E:\novel 等旧项目的 JSON 状态文件转换为 Markdown 格式。
 
-```bash
-python convert_json_to_md.py <项目目录>
+```powershell
+.\convert_json_to_md.ps1 <项目目录>
 ```
 
 转换内容：
@@ -113,6 +113,14 @@ python convert_json_to_md.py <项目目录>
 - `foreshadowing.json` → `追踪/伏笔.md`
 - `character_state.json` → `追踪/角色状态.md`
 - `knowledge.json` → `追踪/知识库.md`
+
+### convert_json_to_md.py — JSON 转 Markdown（Python 版本）
+
+如果 Python 环境可用，也可以使用 Python 版本：
+
+```bash
+python convert_json_to_md.py <项目目录>
+```
 
 ### backup_project.py — 备份项目
 
