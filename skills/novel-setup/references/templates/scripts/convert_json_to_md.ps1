@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# convert_json_to_md.ps1 — 将 JSON 状态文件转换为 Markdown 格式
+# convert_json_to_md.ps1 — 将问卦项目的 JSON 状态文件转换为 Markdown 格式
 # 用法: .\convert_json_to_md.ps1 <项目目录>
 
 param(
@@ -37,189 +37,527 @@ Write-Host "状态目录: $stateDir"
 Write-Host "追踪目录: $trackDir"
 Write-Host ""
 
-# 转换 progress.json
+$converted = 0
+
+# ============================================================
+# 1. 转换 progress.json → 追踪/进度.md
+# ============================================================
 if (Test-Path "$stateDir\progress.json") {
     Write-Host "转换 progress.json..."
     $progress = Get-Content "$stateDir\progress.json" -Raw -Encoding UTF8 | ConvertFrom-Json
     
-    $lines = @("# 进度", "", "## 统计", "")
+    $lines = @()
+    $lines += "# 进度"
+    $lines += ""
+    $lines += "## 统计"
+    $lines += ""
     
-    # 统计
-    $statusCount = @{}
+    # 问卦的 progress.json 有 chapters 子对象
+    $chapters = if ($progress.chapters) { $progress.chapters } else { $progress }
+    
     $total = 0
-    foreach ($prop in $progress.PSObject.Properties) {
+    $drafted = 0
+    $reviewed = 0
+    $polished = 0
+    $accepted = 0
+    $needsRewrite = 0
+    
+    foreach ($prop in $chapters.PSObject.Properties) {
         $total++
-        $status = if ($prop.Value.status) { $prop.Value.status } else { "unknown" }
-        if ($statusCount.ContainsKey($status)) {
-            $statusCount[$status]++
-        } else {
-            $statusCount[$status] = 1
-        }
+        $ch = $prop.Value
+        if ($ch.draft) { $drafted++ }
+        if ($ch.reviewed) { $reviewed++ }
+        if ($ch.polished) { $polished++ }
+        if ($ch.accepted) { $accepted++ }
+        if ($ch.needs_rewrite) { $needsRewrite++ }
     }
     
     $lines += "- 总章数: $total"
-    foreach ($status in $statusCount.Keys) {
-        $lines += "- $status: $($statusCount[$status])"
-    }
-    $lines += "", "## 章节状态", "", "| 章节 | 状态 | 审查分 | 字数 | 备注 |", "|------|------|--------|------|------|"
+    $lines += "- 已写: $drafted"
+    $lines += "- 已审查: $reviewed"
+    $lines += "- 已润色: $polished"
+    $lines += "- 已接受: $accepted"
+    $lines += "- 需重写: $needsRewrite"
+    $lines += ""
+    $lines += "## 章节状态"
+    $lines += ""
+    $lines += "| 章节 | 状态 | 审查分 | 问题数 | 更新时间 |"
+    $lines += "|------|------|--------|--------|----------|"
     
-    foreach ($prop in $progress.PSObject.Properties | Sort-Object { [int]$_.Name }) {
+    foreach ($prop in $chapters.PSObject.Properties | Sort-Object { [int]$_.Name }) {
         $chNum = $prop.Name
         $ch = $prop.Value
-        $status = if ($ch.status) { $ch.status } else { "-" }
+        
+        # 确定状态
+        $status = "待写"
+        if ($ch.accepted) { $status = "已接受" }
+        elseif ($ch.polished) { $status = "已润色" }
+        elseif ($ch.reviewed) { $status = "已审查" }
+        elseif ($ch.draft) { $status = "已写" }
+        
         $score = if ($ch.review_score) { $ch.review_score } else { "-" }
-        $wordCount = if ($ch.word_count) { $ch.word_count } else { "-" }
-        $lines += "| 第${chNum}章 | $status | $score | $wordCount | |"
+        $issues = if ($ch.major_issues) { $ch.major_issues } else { "0" }
+        $updated = if ($ch.updated_at) { $ch.updated_at.Substring(0, 10) } else { "-" }
+        
+        $lines += "| 第${chNum}章 | $status | $score | $issues | $updated |"
     }
     
     $lines | Set-Content "$trackDir\进度.md" -Encoding UTF8
-    Write-Host "  ✓ 进度.md"
+    Write-Host "  ✓ 进度.md ($total 章)"
+    $converted++
 }
 
-# 转换 foreshadowing.json
+# ============================================================
+# 2. 转换 foreshadowing.json → 追踪/伏笔.md
+# ============================================================
 if (Test-Path "$stateDir\foreshadowing.json") {
     Write-Host "转换 foreshadowing.json..."
     $foreshadowing = Get-Content "$stateDir\foreshadowing.json" -Raw -Encoding UTF8 | ConvertFrom-Json
     
-    $lines = @("# 伏笔追踪", "")
-    
-    $active = @()
-    $recovered = @()
-    $overdue = @()
+    $lines = @()
+    $lines += "# 伏笔追踪"
+    $lines += ""
     
     $items = if ($foreshadowing.items) { $foreshadowing.items } else { $foreshadowing }
     
+    $planted = @()
+    $advanced = @()
+    $resolved = @()
+    
     foreach ($item in $items) {
-        $status = if ($item.status) { $item.status } else { "active" }
+        $status = if ($item.status) { $item.status } else { "planted" }
         switch ($status) {
-            "recovered" { $recovered += $item }
-            "overdue" { $overdue += $item }
-            default { $active += $item }
+            "resolved" { $resolved += $item }
+            "advanced" { $advanced += $item }
+            default { $planted += $item }
         }
     }
     
-    # 活跃伏笔
-    $lines += "## 活跃伏笔", "", "| ID | 伏笔 | 播种章节 | 预计回收 | 状态 |", "|----|------|---------|---------|------|"
-    foreach ($item in $active) {
-        $id = if ($item.id) { $item.id } else { "-" }
-        $desc = if ($item.description) { $item.description } else { "-" }
-        $plant = if ($item.plant_chapter) { $item.plant_chapter } else { "-" }
-        $recover = if ($item.recover_chapter) { $item.recover_chapter } else { "-" }
-        $status = if ($item.status) { $item.status } else { "已播种" }
-        $lines += "| $id | $desc | $plant | $recover | $status |"
+    # 活跃伏笔（已播种）
+    $lines += "## 已播种"
+    $lines += ""
+    $lines += "| 伏笔 | 最后活跃 |"
+    $lines += "|------|----------|"
+    foreach ($item in $planted) {
+        $name = if ($item.name) { $item.name } else { "-" }
+        $lastActive = if ($item.last_active_chapter) { "第$($item.last_active_chapter)章" } else { "-" }
+        $lines += "| $name | $lastActive |"
     }
+    $lines += ""
     
-    # 逾期伏笔
-    if ($overdue.Count -gt 0) {
-        $lines += "", "## 逾期伏笔", "", "| ID | 伏笔 | 播种章节 | 预计回收 | 状态 |", "|----|------|---------|---------|------|"
-        foreach ($item in $overdue) {
-            $id = if ($item.id) { $item.id } else { "-" }
-            $desc = if ($item.description) { $item.description } else { "-" }
-            $plant = if ($item.plant_chapter) { $item.plant_chapter } else { "-" }
-            $recover = if ($item.recover_chapter) { $item.recover_chapter } else { "-" }
-            $lines += "| $id | $desc | $plant | $recover | 逾期 |"
-        }
+    # 已推进
+    $lines += "## 已推进"
+    $lines += ""
+    $lines += "| 伏笔 | 最后活跃 |"
+    $lines += "|------|----------|"
+    foreach ($item in $advanced) {
+        $name = if ($item.name) { $item.name } else { "-" }
+        $lastActive = if ($item.last_active_chapter) { "第$($item.last_active_chapter)章" } else { "-" }
+        $lines += "| $name | $lastActive |"
     }
+    $lines += ""
     
-    # 已回收伏笔
-    if ($recovered.Count -gt 0) {
-        $lines += "", "## 已回收伏笔", "", "| ID | 伏笔 | 播种章节 | 回收章节 |", "|----|------|---------|----------|"
-        foreach ($item in $recovered) {
-            $id = if ($item.id) { $item.id } else { "-" }
-            $desc = if ($item.description) { $item.description } else { "-" }
-            $plant = if ($item.plant_chapter) { $item.plant_chapter } else { "-" }
-            $recover = if ($item.recover_chapter) { $item.recover_chapter } else { "-" }
-            $lines += "| $id | $desc | $plant | $recover |"
+    # 已回收
+    if ($resolved.Count -gt 0) {
+        $lines += "## 已回收"
+        $lines += ""
+        $lines += "| 伏笔 | 最后活跃 |"
+        $lines += "|------|----------|"
+        foreach ($item in $resolved) {
+            $name = if ($item.name) { $item.name } else { "-" }
+            $lastActive = if ($item.last_active_chapter) { "第$($item.last_active_chapter)章" } else { "-" }
+            $lines += "| $name | $lastActive |"
         }
+        $lines += ""
     }
     
     # 统计
-    $lines += "", "## 统计", "", "- 活跃: $($active.Count) 个", "- 逾期: $($overdue.Count) 个", "- 已回收: $($recovered.Count) 个"
+    $lines += "## 统计"
+    $lines += ""
+    $lines += "- 已播种: $($planted.Count) 个"
+    $lines += "- 已推进: $($advanced.Count) 个"
+    $lines += "- 已回收: $($resolved.Count) 个"
+    $lines += "- 总计: $($items.Count) 个"
     
     $lines | Set-Content "$trackDir\伏笔.md" -Encoding UTF8
-    Write-Host "  ✓ 伏笔.md"
+    Write-Host "  ✓ 伏笔.md ($($items.Count) 个)"
+    $converted++
 }
 
-# 转换 character_state.json
+# ============================================================
+# 3. 转换 character_state.json → 追踪/角色状态.md
+# ============================================================
 if (Test-Path "$stateDir\character_state.json") {
     Write-Host "转换 character_state.json..."
     $charState = Get-Content "$stateDir\character_state.json" -Raw -Encoding UTF8 | ConvertFrom-Json
     
-    $lines = @("# 角色状态", "")
+    $lines = @()
+    $lines += "# 角色状态"
+    $lines += ""
     
     $characters = if ($charState.characters) { $charState.characters } else { $charState }
     
-    foreach ($prop in $characters.PSObject.Properties) {
-        $name = $prop.Name
-        $info = $prop.Value
-        $lines += "## $name", ""
+    foreach ($ch in $characters) {
+        $name = if ($ch.name) { $ch.name } else { "未知" }
+        $lines += "## $name"
+        $lines += ""
         
-        foreach ($field in $info.PSObject.Properties) {
-            $lines += "- $($field.Name): $($field.Value)"
+        if ($ch.last_active_chapter) {
+            $lines += "- 最后出场: 第$($ch.last_active_chapter)章"
+        }
+        if ($ch.current_location) {
+            $lines += "- 当前位置: $($ch.current_location)"
+        }
+        if ($ch.goal) {
+            $lines += "- 当前目标: $($ch.goal)"
+        }
+        if ($ch.last_seen) {
+            $lines += "- 最后出现: 第$($ch.last_seen)章"
+        }
+        if ($ch.relationships) {
+            $lines += "- 关系: $($ch.relationships -join ', ')"
+        }
+        if ($ch.unfinished_clues) {
+            $lines += "- 未解线索: $($ch.unfinished_clues -join ', ')"
         }
         $lines += ""
     }
     
     $lines | Set-Content "$trackDir\角色状态.md" -Encoding UTF8
-    Write-Host "  ✓ 角色状态.md"
+    Write-Host "  ✓ 角色状态.md ($($characters.Count) 个角色)"
+    $converted++
 }
 
-# 转换 knowledge.json
+# ============================================================
+# 4. 转换 knowledge.json → 追踪/知识库.md
+# ============================================================
 if (Test-Path "$stateDir\knowledge.json") {
     Write-Host "转换 knowledge.json..."
     $knowledge = Get-Content "$stateDir\knowledge.json" -Raw -Encoding UTF8 | ConvertFrom-Json
     
-    $lines = @("# 知识库", "", "> 累积的故事事实", "")
+    $lines = @()
+    $lines += "# 知识库"
+    $lines += ""
+    $lines += "> 累积的故事事实"
+    $lines += ""
     
-    $items = if ($knowledge.items) { $knowledge.items } else { $knowledge }
+    # 问卦的 knowledge.json 用 facts 数组，每项是字符串
+    $facts = if ($knowledge.facts) { $knowledge.facts } else { $knowledge }
     
-    # 按类型分组
-    $characters = @()
-    $settings = @()
-    $plots = @()
-    
-    foreach ($item in $items) {
-        $type = if ($item.type) { $item.type } else { "other" }
-        switch ($type) {
-            "character" { $characters += $item }
-            "setting" { $settings += $item }
-            "plot" { $plots += $item }
-        }
+    $lines += "## 事实列表"
+    $lines += ""
+    foreach ($fact in $facts) {
+        $lines += "- $fact"
     }
-    
-    if ($characters.Count -gt 0) {
-        $lines += "## 角色事实", "", "| 事实 | 首次出现 |", "|------|----------|"
-        foreach ($item in $characters) {
-            $desc = if ($item.description) { $item.description } else { "-" }
-            $chapter = if ($item.chapter) { $item.chapter } else { "-" }
-            $lines += "| $desc | 第${chapter}章 |"
-        }
-        $lines += ""
-    }
-    
-    if ($settings.Count -gt 0) {
-        $lines += "## 设定事实", "", "| 事实 | 首次出现 |", "|------|----------|"
-        foreach ($item in $settings) {
-            $desc = if ($item.description) { $item.description } else { "-" }
-            $chapter = if ($item.chapter) { $item.chapter } else { "-" }
-            $lines += "| $desc | 第${chapter}章 |"
-        }
-        $lines += ""
-    }
-    
-    if ($plots.Count -gt 0) {
-        $lines += "## 剧情事实", "", "| 事实 | 首次出现 |", "|------|----------|"
-        foreach ($item in $plots) {
-            $desc = if ($item.description) { $item.description } else { "-" }
-            $chapter = if ($item.chapter) { $item.chapter } else { "-" }
-            $lines += "| $desc | 第${chapter}章 |"
-        }
-        $lines += ""
-    }
+    $lines += ""
+    $lines += "## 统计"
+    $lines += ""
+    $lines += "- 总计: $($facts.Count) 条"
     
     $lines | Set-Content "$trackDir\知识库.md" -Encoding UTF8
-    Write-Host "  ✓ 知识库.md"
+    Write-Host "  ✓ 知识库.md ($($facts.Count) 条)"
+    $converted++
+}
+
+# ============================================================
+# 5. 转换 pacing_map.json → 追踪/节奏图.md
+# ============================================================
+if (Test-Path "$stateDir\pacing_map.json") {
+    Write-Host "转换 pacing_map.json..."
+    $pacingMap = Get-Content "$stateDir\pacing_map.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    
+    $lines = @()
+    $lines += "# 节奏图"
+    $lines += ""
+    $lines += "## 章节节奏"
+    $lines += ""
+    $lines += "| 章节 | 情绪 | 强度 | 功能 |"
+    $lines += "|------|------|------|------|"
+    
+    foreach ($entry in $pacingMap) {
+        $chapter = if ($entry.chapter) { $entry.chapter } else { "-" }
+        $beat = if ($entry.beat) { $entry.beat } else { "-" }
+        $intensity = if ($entry.intensity) { $entry.intensity } else { "-" }
+        $function = if ($entry.function) { $entry.function } else { "-" }
+        $lines += "| 第${chapter}章 | $beat | $intensity | $function |"
+    }
+    
+    $lines | Set-Content "$trackDir\节奏图.md" -Encoding UTF8
+    Write-Host "  ✓ 节奏图.md ($($pacingMap.Count) 章)"
+    $converted++
+}
+
+# ============================================================
+# 6. 转换 open_threads.json → 追踪/剧情线.md
+# ============================================================
+if (Test-Path "$stateDir\open_threads.json") {
+    Write-Host "转换 open_threads.json..."
+    $openThreads = Get-Content "$stateDir\open_threads.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    
+    $lines = @()
+    $lines += "# 剧情线"
+    $lines += ""
+    
+    $threads = if ($openThreads.threads) { $openThreads.threads } else { $openThreads }
+    
+    # 按状态分组
+    $active = @()
+    $resolved = @()
+    
+    foreach ($thread in $threads) {
+        $status = if ($thread.status) { $thread.status } else { "active" }
+        if ($status -eq "resolved" -or $status -eq "fulfilled") {
+            $resolved += $thread
+        } else {
+            $active += $thread
+        }
+    }
+    
+    # 活跃剧情线
+    $lines += "## 活跃剧情线"
+    $lines += ""
+    $lines += "| ID | 类型 | 标题 | 开始 | 状态 | 所有者 |"
+    $lines += "|----|------|------|------|------|--------|"
+    foreach ($thread in $active) {
+        $id = if ($thread.id) { $thread.id } else { "-" }
+        $type = if ($thread.type) { $thread.type } else { "-" }
+        $title = if ($thread.title) { $thread.title } else { "-" }
+        $opened = if ($thread.opened_at) { "第$($thread.opened_at)章" } else { "-" }
+        $status = if ($thread.status) { $thread.status } else { "-" }
+        $owner = if ($thread.owner) { $thread.owner } else { "-" }
+        $lines += "| $id | $type | $title | $opened | $status | $owner |"
+    }
+    $lines += ""
+    
+    # 已解决剧情线
+    if ($resolved.Count -gt 0) {
+        $lines += "## 已解决剧情线"
+        $lines += ""
+        $lines += "| ID | 类型 | 标题 | 开始 | 状态 |"
+        $lines += "|----|------|------|------|------|"
+        foreach ($thread in $resolved) {
+            $id = if ($thread.id) { $thread.id } else { "-" }
+            $type = if ($thread.type) { $thread.type } else { "-" }
+            $title = if ($thread.title) { $thread.title } else { "-" }
+            $opened = if ($thread.opened_at) { "第$($thread.opened_at)章" } else { "-" }
+            $status = if ($thread.status) { $thread.status } else { "-" }
+            $lines += "| $id | $type | $title | $opened | $status |"
+        }
+        $lines += ""
+    }
+    
+    # 统计
+    $lines += "## 统计"
+    $lines += ""
+    $lines += "- 活跃: $($active.Count) 条"
+    $lines += "- 已解决: $($resolved.Count) 条"
+    $lines += "- 总计: $($threads.Count) 条"
+    
+    $lines | Set-Content "$trackDir\剧情线.md" -Encoding UTF8
+    Write-Host "  ✓ 剧情线.md ($($threads.Count) 条)"
+    $converted++
+}
+
+# ============================================================
+# 7. 转换 reader_promises.json → 追踪/读者承诺.md
+# ============================================================
+if (Test-Path "$stateDir\reader_promises.json") {
+    Write-Host "转换 reader_promises.json..."
+    $readerPromises = Get-Content "$stateDir\reader_promises.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    
+    $lines = @()
+    $lines += "# 读者承诺"
+    $lines += ""
+    
+    $promises = if ($readerPromises.promises) { $readerPromises.promises } else { $readerPromises }
+    
+    # 按状态分组
+    $fulfilled = @()
+    $pending = @()
+    
+    foreach ($promise in $promises) {
+        $status = if ($promise.status) { $promise.status } else { "pending" }
+        if ($status -eq "fulfilled") {
+            $fulfilled += $promise
+        } else {
+            $pending += $promise
+        }
+    }
+    
+    # 待兑现
+    $lines += "## 待兑现"
+    $lines += ""
+    $lines += "| 承诺 | 最后活跃 |"
+    $lines += "|------|----------|"
+    foreach ($promise in $pending) {
+        $text = if ($promise.promise) { $promise.promise } else { "-" }
+        $lastActive = if ($promise.last_active_chapter) { "第$($promise.last_active_chapter)章" } else { "-" }
+        $lines += "| $text | $lastActive |"
+    }
+    $lines += ""
+    
+    # 已兑现
+    if ($fulfilled.Count -gt 0) {
+        $lines += "## 已兑现"
+        $lines += ""
+        $lines += "| 承诺 | 最后活跃 |"
+        $lines += "|------|----------|"
+        foreach ($promise in $fulfilled) {
+            $text = if ($promise.promise) { $promise.promise } else { "-" }
+            $lastActive = if ($promise.last_active_chapter) { "第$($promise.last_active_chapter)章" } else { "-" }
+            $lines += "| $text | $lastActive |"
+        }
+        $lines += ""
+    }
+    
+    # 统计
+    $lines += "## 统计"
+    $lines += ""
+    $lines += "- 待兑现: $($pending.Count) 个"
+    $lines += "- 已兑现: $($fulfilled.Count) 个"
+    $lines += "- 总计: $($promises.Count) 个"
+    
+    $lines | Set-Content "$trackDir\读者承诺.md" -Encoding UTF8
+    Write-Host "  ✓ 读者承诺.md ($($promises.Count) 个)"
+    $converted++
+}
+
+# ============================================================
+# 8. 转换 faction_moves.json → 追踪/势力动态.md
+# ============================================================
+if (Test-Path "$stateDir\faction_moves.json") {
+    Write-Host "转换 faction_moves.json..."
+    $factionMoves = Get-Content "$stateDir\faction_moves.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    
+    $lines = @()
+    $lines += "# 势力动态"
+    $lines += ""
+    $lines += "| 势力 | 状态 | 最后活跃 |"
+    $lines += "|------|------|----------|"
+    
+    $moves = if ($factionMoves.moves) { $factionMoves.moves } else { $factionMoves }
+    
+    foreach ($move in $moves) {
+        $faction = if ($move.faction) { $move.faction } else { "-" }
+        $status = if ($move.status) { $move.status } else { "-" }
+        $lastActive = if ($move.last_active_chapter) { "第$($move.last_active_chapter)章" } else { "-" }
+        $lines += "| $faction | $status | $lastActive |"
+    }
+    
+    $lines += ""
+    $lines += "## 统计"
+    $lines += ""
+    $lines += "- 总计: $($moves.Count) 个势力"
+    
+    $lines | Set-Content "$trackDir\势力动态.md" -Encoding UTF8
+    Write-Host "  ✓ 势力动态.md ($($moves.Count) 个势力)"
+    $converted++
+}
+
+# ============================================================
+# 9. 转换 style_samples.json → 追踪/风格样本.md
+# ============================================================
+if (Test-Path "$stateDir\style_samples.json") {
+    Write-Host "转换 style_samples.json..."
+    $styleSamples = Get-Content "$stateDir\style_samples.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    
+    $lines = @()
+    $lines += "# 风格样本"
+    $lines += ""
+    
+    if ($styleSamples.preferred) {
+        $lines += "## 推荐风格"
+        $lines += ""
+        foreach ($item in $styleSamples.preferred) {
+            $lines += "- $item"
+        }
+        $lines += ""
+    }
+    
+    if ($styleSamples.avoid) {
+        $lines += "## 避免风格"
+        $lines += ""
+        foreach ($item in $styleSamples.avoid) {
+            $lines += "- $item"
+        }
+        $lines += ""
+    }
+    
+    $lines | Set-Content "$trackDir\风格样本.md" -Encoding UTF8
+    Write-Host "  ✓ 风格样本.md"
+    $converted++
+}
+
+# ============================================================
+# 10. 转换 canonical_terms.json → 追踪/术语表.md
+# ============================================================
+if (Test-Path "$stateDir\canonical_terms.json") {
+    Write-Host "转换 canonical_terms.json..."
+    $canonicalTerms = Get-Content "$stateDir\canonical_terms.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    
+    $lines = @()
+    $lines += "# 术语表"
+    $lines += ""
+    $lines += "| 规范术语 | 别名 |"
+    $lines += "|----------|------|"
+    
+    foreach ($prop in $canonicalTerms.PSObject.Properties) {
+        $term = $prop.Name
+        $aliases = $prop.Value
+        $aliasStr = if ($aliases.Count -gt 0) { $aliases -join ', ' } else { "无" }
+        $lines += "| $term | $aliasStr |"
+    }
+    
+    $lines | Set-Content "$trackDir\术语表.md" -Encoding UTF8
+    Write-Host "  ✓ 术语表.md ($($canonicalTerms.PSObject.Properties.Count) 个术语)"
+    $converted++
+}
+
+# ============================================================
+# 11. 转换 project_bible.json → 追踪/项目圣经.md
+# ============================================================
+if (Test-Path "$stateDir\project_bible.json") {
+    Write-Host "转换 project_bible.json..."
+    $projectBible = Get-Content "$stateDir\project_bible.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    
+    $lines = @()
+    $lines += "# 项目圣经"
+    $lines += ""
+    
+    if ($projectBible.core_theme) {
+        $lines += "## 核心主题"
+        $lines += ""
+        $lines += $projectBible.core_theme
+        $lines += ""
+    }
+    
+    if ($projectBible.tone) {
+        $lines += "## 基调"
+        $lines += ""
+        $lines += $projectBible.tone
+        $lines += ""
+    }
+    
+    if ($projectBible.story_promises) {
+        $lines += "## 故事承诺"
+        $lines += ""
+        $lines += "| 承诺 | 开始 | 最后兑现 | 状态 |"
+        $lines += "|------|------|----------|------|"
+        foreach ($promise in $projectBible.story_promises) {
+            $text = if ($promise.promise) { $promise.promise } else { "-" }
+            $opened = if ($promise.opened_at) { "第$($promise.opened_at)章" } else { "-" }
+            $lastPaid = if ($promise.last_paid_at) { "第$($promise.last_paid_at)章" } else { "-" }
+            $status = if ($promise.status) { $promise.status } else { "-" }
+            $lines += "| $text | $opened | $lastPaid | $status |"
+        }
+        $lines += ""
+    }
+    
+    $lines | Set-Content "$trackDir\项目圣经.md" -Encoding UTF8
+    Write-Host "  ✓ 项目圣经.md"
+    $converted++
 }
 
 Write-Host ""
-Write-Host "转换完成!"
+Write-Host "转换完成! 共转换 $converted 个文件"
+Write-Host "追踪文件位置: $trackDir"

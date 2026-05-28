@@ -210,7 +210,9 @@ python export_chapters.py <项目目录> --all --format txt # 导出为txt
 - [ ] 是否有 JSON 状态文件（progress.json 等）
 - [ ] 是否有章节文件（state/chapters/ 或 正文/）
 - [ ] 是否有配置文件（config.yaml）
-- [ ] 是否有审查/质量报告
+- [ ] 是否有审查/质量报告（state/reviews/、state/quality/）
+- [ ] 是否有章节摘要（state/summaries/）
+- [ ] 是否有章节简报（state/briefs/）
 ```
 
 ### 5.2 迁移步骤
@@ -220,10 +222,48 @@ python export_chapters.py <项目目录> --all --format txt # 导出为txt
 | 1 | 创建新目录结构 | 正文/、设定/、大纲/、追踪/、对标/、拆文库/、参考资料/、backups/、output/ |
 | 2 | 复制章节文件 | 正文/第{N}章_{章名}.md |
 | 3 | 转换 JSON → Markdown | 追踪/进度.md、伏笔.md、角色状态.md、知识库.md |
-| 4 | 创建缺失的追踪文件 | 追踪/剧情线.md、节奏图.md、上下文.md |
-| 5 | 部署 novel-setup 基础设施 | .claude/ 目录 |
-| 6 | 执行健康度检查 | 追踪/伏笔健康度.md、节奏健康度.md |
-| 7 | 生成迁移报告 | 追踪/迁移报告.md |
+| 4 | 转换扩展 JSON → Markdown | 追踪/节奏图.md、剧情线.md、读者承诺.md、势力动态.md、风格样本.md、术语表.md、项目圣经.md |
+| 5 | 复制章节摘要 | 追踪/摘要/（从 state/summaries/ 复制） |
+| 6 | 复制章节简报 | 追踪/简报/（从 state/briefs/ 复制） |
+| 7 | 复制章节审查 | 追踪/审查/（从 state/reviews/ 复制） |
+| 8 | 复制质量报告 | 追踪/质量/（从 state/quality/ 复制） |
+| 9 | 创建缺失的追踪文件 | 追踪/上下文.md |
+| 10 | 部署 novel-setup 基础设施 | .claude/ 目录 |
+| 11 | 执行健康度检查 | 追踪/伏笔健康度.md、节奏健康度.md |
+| 12 | 生成迁移报告 | 追踪/迁移报告.md |
+
+### 5.2.1 问卦项目特殊处理
+
+问卦项目有以下特殊目录需要处理：
+
+| 源目录 | 目标目录 | 说明 |
+|--------|---------|------|
+| state/chapters/ | 正文/ | 章节文件（ch_001.txt → 第001章.md） |
+| state/chapters_revised/ | 正文/ | 修订后的章节（优先使用） |
+| state/chapters_manual/ | 正文/ | 手动编辑的章节（最优先） |
+| state/summaries/ | 追踪/摘要/ | 章节摘要 |
+| state/briefs/ | 追踪/简报/ | 章节简报 |
+| state/reviews/ | 追踪/审查/ | 章节审查 |
+| state/quality/ | 追踪/质量/ | 质量报告 |
+| state/volume_reports/ | 追踪/卷报告/ | 卷报告 |
+| state/feedback/ | 追踪/反馈/ | 反馈记录 |
+| state/foreshadowing_reschedule/ | 追踪/伏笔重调度/ | 伏笔重调度记录 |
+
+章节文件优先级：
+1. state/chapters_manual/（最优先）
+2. state/chapters_revised/（次优先）
+3. state/chapters/（默认）
+
+### 5.2.2 章节文件命名转换
+
+问卦项目的章节文件命名格式：
+- 源文件：ch_001.txt、ch_002.txt
+- 目标文件：第001章.md、第002章.md
+
+转换规则：
+1. 提取章节号：ch_001.txt → 1
+2. 生成目标文件名：第001章.md
+3. 如果源文件有章名（如 ch_001_京城.md），使用章名：第001章_京城.md
 
 ### 5.3 迁移报告格式
 
